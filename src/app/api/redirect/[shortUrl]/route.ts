@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+type Url = {
+    originalUrl: string;
+    shortUrl: string;
+    clicks: number;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: { shortUrl: string } }
 ) {
+  const { searchParams } = new URL(request.url);
+  const checkOnly = searchParams.get("check") === "true";
+  let isSuccess = false;
+  let url: Url | null = null;
+
   try {
     const shortUrl = params.shortUrl;
 
-    const url = await prisma.url.update({
+    url = await prisma.url.update({
       where: {
         shortUrl,
       },
@@ -19,7 +30,7 @@ export async function GET(
       },
     });
 
-    return NextResponse.redirect(url.originalUrl, { status: 301 });
+    isSuccess = true;
   } catch (error: any) {
     if (error.code === 'P2025') {
       return NextResponse.json(
@@ -27,10 +38,16 @@ export async function GET(
         { status: 404 }
       );
     }
-    console.error("Error processing redirect:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
     );
   }
-} 
+  if (isSuccess) {
+    if (checkOnly) {
+        return NextResponse.json({ valid: true }, { status: 200 });
+    } else {
+        return NextResponse.redirect(url!.originalUrl, { status: 301 });
+    }
+  }
+}
